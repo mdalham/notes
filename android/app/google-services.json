@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "800975618017",
+    "project_id": "notes-5fc08",
+    "storage_bucket": "notes-5fc08.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:800975618017:android:f9a28ecd05849368551ca0",
+        "android_client_info": {
+          "package_name": "notedevad.blogspot.com.notes"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBsix-T9X7_ESFwDMigHHKiEQa8vyHqLFQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
