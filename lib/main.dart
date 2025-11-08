@@ -1,34 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:notes/screen/support%20screen/splash_screen.dart';
-import 'package:notes/service/provider/database_provider.dart';
-import 'package:notes/service/provider/theme_provider.dart';
-import 'package:notes/theme/theme.dart';
 import 'package:provider/provider.dart';
-import 'package:user_messaging_platform/user_messaging_platform.dart' as ump;
-import 'firebase_options.dart';
+
+import 'service/provider/database_provider.dart';
+import 'service/provider/theme_provider.dart';
+import 'screen/support screen/splash_screen.dart';
+import 'theme/theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp();
 
   await MobileAds.instance.initialize();
-
-  try {
-    final ump.ConsentInformation consentInfo = await ump
-        .UserMessagingPlatform
-        .instance
-        .requestConsentInfoUpdate();
-
-    if (consentInfo.formStatus == ump.FormStatus.available) {
-      await ump.UserMessagingPlatform.instance.showConsentForm();
-    }
-  } catch (e) {
-    debugPrint('Consent check failed: $e');
-  }
-
 
   runApp(
     MultiProvider(
@@ -40,6 +24,7 @@ void main() async {
     ),
   );
 }
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});

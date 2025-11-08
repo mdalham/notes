@@ -1,7 +1,15 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:geocoding/geocoding.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:geolocator/geolocator.dart';
+
+
+enum ConsentStatus {
+  personalized,
+  nonPersonalized,
+}
 
 class AdsManager {
   final List<int> noteIds;
@@ -27,6 +35,15 @@ class AdsManager {
   bool isAdShowing = false;
   final ColorScheme? colorScheme;
 
+  ConsentStatus consentStatus = ConsentStatus.personalized;
+
+  static const Set<String> _eeaCountryCodes = {
+    'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE',
+    'GR','HU','IS','IE','IT','LV','LI','LT','LU','MT','NL',
+    'NO','PL','PT','RO','SK','SI','ES','SE'
+  };
+
+
   AdsManager({
     required this.noteIds,
     required this.nativeAdId,
@@ -35,18 +52,86 @@ class AdsManager {
     this.colorScheme,
   });
 
+  /// Initialize Mobile Ads SDK & setup consent
   Future<void> initialize() async {
     if (_isDisposed) return;
     await MobileAds.instance.initialize();
+    await _requestUserConsent();
     _loadInterstitial();
     _setupAds();
   }
+  AdRequest _adRequest() {
+    return AdRequest(
+      nonPersonalizedAds: consentStatus == ConsentStatus.nonPersonalized,
+    );
+  }
+
+
+  Future<void> _requestUserConsent() async {
+    try {
+      final requestConfiguration = RequestConfiguration(
+        tagForUnderAgeOfConsent: TagForUnderAgeOfConsent.unspecified,
+        maxAdContentRating: MaxAdContentRating.g,
+      );
+
+      await MobileAds.instance.updateRequestConfiguration(requestConfiguration);
+
+      bool isEEAUser = await _detectEEAUser();
+      consentStatus = isEEAUser
+          ? ConsentStatus.nonPersonalized
+          : ConsentStatus.personalized;
+    } catch (e) {
+      consentStatus = ConsentStatus.personalized;
+    }
+  }
+
+
+  Future<bool> _detectEEAUser() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever) {
+        return false;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+      );
+      double latitude = position.latitude;
+      double longitude = position.longitude;
+
+      return await _isLocationInEEA(latitude, longitude);
+    } catch (e) {
+      return false;
+    }
+  }
+
+
+  Future<bool> _isLocationInEEA(double lat, double lon) async {
+    try {
+      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lon);
+      if (placemarks.isEmpty) return false;
+
+      String? countryCode = placemarks.first.isoCountryCode;
+      if (countryCode == null) return false;
+
+      return _eeaCountryCodes.contains(countryCode.toUpperCase());
+    } catch (e) {
+      return false;
+    }
+  }
+
+
+
+
+
 
   void _setupAds() {
     final totalItems = noteIds.length;
     final nativeCount = AdsCount.nativeAdCount(totalItems);
     final bannerCount = AdsCount.bannerAdCount(totalItems);
-
     final occupiedPositions = <int>{};
 
     // Load native ads first
@@ -57,7 +142,7 @@ class AdsManager {
       loadNativeAd(index);
     }
 
-    // Load banner ads on remaining positions
+    // Load banner ads
     for (int i = 0; i < bannerCount; i++) {
       int index = _findAvailableIndex(occupiedPositions, totalItems);
       if (index == -1) break;
@@ -65,7 +150,6 @@ class AdsManager {
       loadBannerAd(index);
     }
   }
-
 
   void loadNativeAd(int index) {
     if (_isDisposed ||
@@ -80,7 +164,7 @@ class AdsManager {
     final ad = NativeAd(
       adUnitId: nativeAdId,
       factoryId: 'listTile',
-      request: const AdRequest(),
+      request: _adRequest(),
       listener: NativeAdListener(
         onAdLoaded: (ad) {
           if (_isDisposed) return;
@@ -129,6 +213,7 @@ class AdsManager {
         ),
       ),
     );
+
     ad.load();
   }
 
@@ -145,7 +230,7 @@ class AdsManager {
     final ad = BannerAd(
       adUnitId: bannerAdId,
       size: AdSize.banner,
-      request: const AdRequest(),
+      request: _adRequest(),
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           if (_isDisposed) return;
@@ -175,13 +260,9 @@ class AdsManager {
   void _scheduleRetry(int index, {required bool isNative, bool resetRetry = false}) {
     if (_isDisposed) return;
 
-    // Reset retry count if refresh triggered
     if (resetRetry) {
-      if (isNative) {
-        _nativeRetry[index] = 0;
-      } else {
-        _bannerRetry[index] = 0;
-      }
+      if (isNative) _nativeRetry[index] = 0;
+      else _bannerRetry[index] = 0;
     }
 
     final attempt = isNative ? (_nativeRetry[index] ?? 1) : (_bannerRetry[index] ?? 1);
@@ -207,28 +288,22 @@ class AdsManager {
     });
   }
 
-
   Duration _retryDelay(int attempt) =>
       Duration(seconds: min(10 * pow(2, attempt - 1).toInt(), 120));
-
 
   void _loadInterstitial() {
     if (_isDisposed) return;
 
     InterstitialAd.load(
       adUnitId: interstitialAdId,
-      request: const AdRequest(),
+      request: _adRequest(),
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _interstitialAd = ad;
-
-          // Listen for ad events
           _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
-            onAdShowedFullScreenContent: (ad) {
-              isAdShowing = true; // Disable back press
-            },
+            onAdShowedFullScreenContent: (ad) => isAdShowing = true,
             onAdDismissedFullScreenContent: (ad) {
-              isAdShowing = false; // Re-enable back press
+              isAdShowing = false;
               ad.dispose();
               _loadInterstitial();
             },
@@ -241,9 +316,7 @@ class AdsManager {
         },
         onAdFailedToLoad: (_) {
           _interstitialAd = null;
-          if (!_isDisposed) {
-            Future.delayed(const Duration(seconds: 5), _loadInterstitial);
-          }
+          if (!_isDisposed) Future.delayed(const Duration(seconds: 5), _loadInterstitial);
         },
       ),
     );
@@ -256,28 +329,15 @@ class AdsManager {
     }
   }
 
-
   Widget getAdWidget(int index) {
     final type = _loadedAdPositions[index];
     if (type == 'native') {
       final ad = _nativeAds[index];
       if (ad != null && _nativeReady[index]?.value == true) {
-        final bool useSmallTemplate = index % 2 == 0;
-
+        final useSmallTemplate = index % 2 == 0;
         final constraints = useSmallTemplate
-            ? const BoxConstraints(
-          minWidth: 320,
-          minHeight: 90,
-          maxWidth: 400,
-          maxHeight: 200,
-        )
-            : const BoxConstraints(
-          minWidth: 320,
-          minHeight: 320,
-          maxWidth: 400,
-          maxHeight: 350,
-        );
-
+            ? const BoxConstraints(minWidth: 320, minHeight: 90, maxWidth: 400, maxHeight: 200)
+            : const BoxConstraints(minWidth: 320, minHeight: 320, maxWidth: 400, maxHeight: 350);
         return ConstrainedBox(
           constraints: constraints,
           child: AdWidget(ad: ad),
@@ -295,7 +355,6 @@ class AdsManager {
     }
     return const SizedBox.shrink();
   }
-
 
   int countAdsBefore(int noteIndex) {
     int count = 0;
@@ -328,7 +387,6 @@ class AdsManager {
   int _findAvailableIndex(Set<int> occupied, int totalItems) {
     if (occupied.length >= totalItems) return -1;
 
-    // First try random
     int tries = 0;
     while (tries < 100) {
       int index = _random.nextInt(totalItems);
@@ -336,7 +394,6 @@ class AdsManager {
       tries++;
     }
 
-    // Fallback to sequential scan
     for (int i = 0; i < totalItems; i++) {
       if (!occupied.contains(i)) return i;
     }
@@ -346,27 +403,22 @@ class AdsManager {
   void refreshAds() {
     if (_isDisposed) return;
 
-    // Clear native ads
-    _nativeAds.forEach((index, ad) => ad.dispose());
+    _nativeAds.forEach((_, ad) => ad.dispose());
     _nativeAds.clear();
     _nativeReady.forEach((_, notifier) => notifier.value = false);
     _nativeRetry.clear();
 
-    // Clear banner ads
-    _bannerAds.forEach((index, ad) => ad.dispose());
+    _bannerAds.forEach((_, ad) => ad.dispose());
     _bannerAds.clear();
     _bannerReady.forEach((_, notifier) => notifier.value = false);
     _bannerRetry.clear();
 
-    // Clear loaded positions
     _loadedAdPositions.clear();
     loadedAdsCount.value = 0;
 
-    // Re-setup ads with reset retry
     final totalItems = noteIds.length;
     final nativeCount = AdsCount.nativeAdCount(totalItems);
     final bannerCount = AdsCount.bannerAdCount(totalItems);
-
     final occupiedPositions = <int>{};
 
     for (int i = 0; i < nativeCount; i++) {
@@ -382,13 +434,11 @@ class AdsManager {
       occupiedPositions.add(index);
       _scheduleRetry(index, isNative: false, resetRetry: true);
     }
-
   }
 }
 
 class AdsCount {
   static int nativeAdCount(int totalItems) {
-
     if (totalItems <= 10) return 0;
     if (totalItems <= 20) return 1;
     if (totalItems <= 40) return 2;
@@ -398,7 +448,6 @@ class AdsCount {
   }
 
   static int bannerAdCount(int totalItems) {
-
     if (totalItems <= 10) return 2;
     if (totalItems <= 20) return 3;
     if (totalItems <= 40) return 6;

@@ -44,7 +44,8 @@ dependencies:
   google_mobile_ads: ^6.0.0
   package_info_plus: ^9.0.0
   firebase_core: ^4.2.0
-  user_messaging_platform: ^1.3.0
+  geolocator: ^14.0.1
+  geocoding: ^4.0.0
 
 
 
