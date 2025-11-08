@@ -26,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+
     _searchController.addListener(() {
       setState(() {
         _query = _searchController.text;
@@ -42,10 +43,17 @@ class _HomeScreenState extends State<HomeScreen> {
         bannerAdId: 'ca-app-pub-7237142331361857/1081972405',
         interstitialAdId: 'ca-app-pub-7237142331361857/4917662676',
       );
-      _adsManager?.initialize();
-      setState(() {});
+
+      try {
+        await _adsManager?.initialize();
+        setState(() {});
+      } catch (e) {
+        debugPrint('AdsManager initialization failed: $e');
+      }
     });
   }
+
+
 
   @override
   void didChangeDependencies() {

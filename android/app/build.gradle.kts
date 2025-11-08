@@ -26,7 +26,7 @@ android {
     defaultConfig {
         applicationId = "notedevad.blogspot.com.notes"
         minSdk = flutter.minSdkVersion
-        targetSdk = 33
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

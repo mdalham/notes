@@ -31,9 +31,9 @@ class _FolderNotesItemNotesState extends State<FolderNotesItemNotes> {
 
       _adsManager = AdsManager(
         noteIds: provider.notes.map((e) => e.id ?? 0).toList(),
-        nativeAdId: 'ca-app-pub-3940256099942544/2247696110',
-        bannerAdId: 'ca-app-pub-3940256099942544/6300978111',
-        interstitialAdId: 'ca-app-pub-3940256099942544/1033173712',
+        nativeAdId: 'ca-app-pub-7237142331361857/6292566903',
+        bannerAdId: 'ca-app-pub-7237142331361857/7460617846',
+        interstitialAdId: 'ca-app-pub-7237142331361857/2520842858',
       );
       _adsManager!.initialize();
       setState(() {});
@@ -158,22 +158,8 @@ class _FolderNotesItemNotesState extends State<FolderNotesItemNotes> {
   }
 
   Future<void> refreshNotes() async {
-    setState(() {
-      _isRefreshing = true;
-    });
-    await Provider.of<NoteProvider>(context, listen: false).loadNotes();
-
-    _adsManager!.dispose();
-    final provider = Provider.of<NoteProvider>(context, listen: false);
-    _adsManager = AdsManager(
-      noteIds: provider.notes.map((e) => e.id ?? 0).toList(),
-      nativeAdId: 'ca-app-pub-3940256099942544/2247696110',
-      bannerAdId: 'ca-app-pub-3940256099942544/6300978111',
-      interstitialAdId: 'ca-app-pub-3940256099942544/1033173712',
-    );
-    await _adsManager!.initialize();
-    setState(() {
-      _isRefreshing = false;
-    }); // rebuild grid
+    setState(() => _isRefreshing = true);
+    _adsManager?.refreshAds();
+    setState(() => _isRefreshing = false);
   }
 }

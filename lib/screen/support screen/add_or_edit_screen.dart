@@ -80,7 +80,10 @@ class _AddOrEditScreenState extends State<AddOrEditScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    return PopScope(
+    return WillPopScope(
+      onWillPop: () async {
+        return await _leaveAlert();
+      },
       child: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: Scaffold(
@@ -329,7 +332,7 @@ class _AddOrEditScreenState extends State<AddOrEditScreen> {
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(false),
                   child: Text(
-                    'No',
+                    'Cancel',
                     style: TextStyle(
                       color: colorScheme.primary,
                       fontWeight: FontWeight.w600,
@@ -339,7 +342,7 @@ class _AddOrEditScreenState extends State<AddOrEditScreen> {
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(true),
                   child: Text(
-                    'Yes',
+                    'Continue',
                     style: TextStyle(
                       color: colorScheme.onPrimary,
                       fontWeight: FontWeight.w600,
