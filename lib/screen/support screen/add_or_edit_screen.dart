@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:notes/model/folder_model.dart';
 import 'package:provider/provider.dart';
+import '../../model/custom_snackbar.dart';
 import '../../service/database/table/folder.dart';
 import '../../service/database/table/note.dart';
 import '../../service/provider/database_provider.dart';
@@ -280,6 +281,16 @@ class _AddOrEditScreenState extends State<AddOrEditScreen> {
       _initialFolderItem = _selectedFolderItem;
       _initialHeart = isMarkedHeart;
     });
+
+    if (context.mounted) {
+      CustomSnackBar.show(
+        context,
+        message: "Note saved successfully!",
+        backgroundColor: Colors.green,
+        icon: Icons.check_circle_outline,
+      );
+    }
+
     Navigator.pop(context, _note);
   }
 

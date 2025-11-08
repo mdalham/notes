@@ -69,45 +69,38 @@ class AdsManager {
 
   Future<void> _requestUserConsent() async {
     try {
+      // Configure Mobile Ads request
       final requestConfiguration = RequestConfiguration(
         tagForUnderAgeOfConsent: TagForUnderAgeOfConsent.unspecified,
         maxAdContentRating: MaxAdContentRating.g,
       );
-
       await MobileAds.instance.updateRequestConfiguration(requestConfiguration);
 
-      bool isEEAUser = await _detectEEAUser();
-      consentStatus = isEEAUser
-          ? ConsentStatus.nonPersonalized
-          : ConsentStatus.personalized;
-    } catch (e) {
-      consentStatus = ConsentStatus.personalized;
-    }
-  }
-
-
-  Future<bool> _detectEEAUser() async {
-    try {
+      // Check if location permission is granted
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.deniedForever) {
-        return false;
+
+      if (permission != LocationPermission.deniedForever) {
+        // Get current position
+        Position position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.low);
+
+        // Determine if user is in EEA
+        bool inEEA = await _isLocationInEEA(position.latitude, position.longitude);
+        consentStatus = inEEA
+            ? ConsentStatus.nonPersonalized
+            : ConsentStatus.personalized;
+      } else {
+        // If permission denied permanently, fallback to non-personalized
+        consentStatus = ConsentStatus.nonPersonalized;
       }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
-      );
-      double latitude = position.latitude;
-      double longitude = position.longitude;
-
-      return await _isLocationInEEA(latitude, longitude);
     } catch (e) {
-      return false;
+      // On error, fallback to personalized
+      consentStatus = ConsentStatus.personalized;
     }
   }
-
 
   Future<bool> _isLocationInEEA(double lat, double lon) async {
     try {
@@ -122,10 +115,6 @@ class AdsManager {
       return false;
     }
   }
-
-
-
-
 
 
   void _setupAds() {
