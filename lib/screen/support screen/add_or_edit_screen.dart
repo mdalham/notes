@@ -215,7 +215,7 @@ class _AddOrEditScreenState extends State<AddOrEditScreen> {
                       },
                       cursorWidth: 4,
                       maxLines: null,
-                      minLines: 24,
+                      minLines: (MediaQuery.of(context).size.height * 0.028).ceil(),
                       keyboardType: TextInputType.multiline,
                       decoration: InputDecoration(
                         hintText: 'Write here...',
@@ -370,7 +370,7 @@ class _AddOrEditScreenState extends State<AddOrEditScreen> {
 
   void _loadBanner() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-7237142331361857/1169989358', // Test Banner ID
+      adUnitId: 'ca-app-pub-7237142331361857/1169989358',
       size: AdSize.banner,
       request: AdRequest(),
       listener: BannerAdListener(

@@ -35,7 +35,7 @@ class CustomListTile extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: colorScheme.outline),
           ),
-          child: Image.asset('asset/strokIcons/note.png', color: Colors.grey,scale: 0.8,)
+          child: Image.asset('asset/strokIcons/note.png', color: Colors.grey,scale: 0.6,)
         ),
         title: Text(
           title,

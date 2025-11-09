@@ -62,7 +62,7 @@ class _SettingScreenState extends State<SettingScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
-                    vertical: 1,
+                    vertical: 4,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -102,7 +102,7 @@ class _SettingScreenState extends State<SettingScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
-                    vertical: 4,
+                    vertical: 2,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -136,7 +136,6 @@ class _SettingScreenState extends State<SettingScreen> {
                                   .withOpacity(0.3),
                               onChanged: (value) {
                                 viewProvider.toggleView(value);
-                                setState(() {});
                               },
                             ),
                           );
@@ -156,7 +155,10 @@ class _SettingScreenState extends State<SettingScreen> {
                   border: Border.all(color: colorScheme.outline, width: 1.5),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
