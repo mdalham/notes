@@ -250,8 +250,11 @@ class AdsManager {
     if (_isDisposed) return;
 
     if (resetRetry) {
-      if (isNative) _nativeRetry[index] = 0;
-      else _bannerRetry[index] = 0;
+      if (isNative) {
+        _nativeRetry[index] = 0;
+      } else {
+        _bannerRetry[index] = 0;
+      }
     }
 
     final attempt = isNative ? (_nativeRetry[index] ?? 1) : (_bannerRetry[index] ?? 1);

@@ -4,6 +4,7 @@ import 'package:notes/service/database/table/note.dart';
 import 'package:provider/provider.dart';
 import '../screen/support screen/add_or_edit_screen.dart';
 import '../service/provider/database_provider.dart';
+import 'custom_snackbar.dart';
 import 'dialog_helper.dart';
 
 class NotesLayout extends StatefulWidget {
@@ -130,6 +131,12 @@ class _NotesLayoutState extends State<NotesLayout> {
       await _databaseHelper.deleteNote(widget.note.id!);
       if (mounted) {
         widget.onUpdated.call();
+        CustomSnackBar.show(
+          context,
+          message: "Note deleted successfully!",
+          backgroundColor: Colors.redAccent,
+          icon: Icons.delete_outline,
+        );
       }
     }
   }

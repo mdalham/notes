@@ -129,10 +129,10 @@ class _AddOrEditScreenState extends State<AddOrEditScreen> {
               IconButton(
                 onPressed: _saveNote,
                 icon: Image.asset(
-                  'asset/filledIcons/saved.png',
+                  'asset/strokIcons/check.png',
                   width: 20,
                   height: 20,
-                  color: colorScheme.onPrimary,
+                  color: Colors.blue,
                 ),
               ),
             ],

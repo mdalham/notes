@@ -11,8 +11,8 @@ import 'theme/theme.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-
   await MobileAds.instance.initialize();
+
 
   runApp(
     MultiProvider(

@@ -22,6 +22,7 @@ class _SettingScreenState extends State<SettingScreen> {
     _loadBanner();
     _loadVersion();
   }
+
   @override
   void dispose() {
     _bannerAd?.dispose();
@@ -44,22 +45,13 @@ class _SettingScreenState extends State<SettingScreen> {
           ),
         ),
       ),
-
-      bottomNavigationBar: _isBannerLoaded
-          ? Container(
-        color: Colors.transparent,
-        width: double.infinity,
-        height: _bannerAd!.size.height.toDouble(),
-        child: AdWidget(ad: _bannerAd!),
-      )
-          : SizedBox.shrink(),
-
       body: SafeArea(
         child: Padding(
-          padding: EdgeInsets.all(10),
+          padding: const EdgeInsets.all(10),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Theme Mode Row
               Container(
                 decoration: BoxDecoration(
                   color: colorScheme.primaryContainer,
@@ -67,7 +59,7 @@ class _SettingScreenState extends State<SettingScreen> {
                   border: Border.all(color: colorScheme.outline, width: 1.5),
                 ),
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -95,7 +87,9 @@ class _SettingScreenState extends State<SettingScreen> {
                   ),
                 ),
               ),
-              SizedBox(height: 10 ,),
+              const SizedBox(height: 10),
+
+              // App Version Row
               Container(
                 decoration: BoxDecoration(
                   color: colorScheme.primaryContainer,
@@ -103,7 +97,7 @@ class _SettingScreenState extends State<SettingScreen> {
                   border: Border.all(color: colorScheme.outline, width: 1.5),
                 ),
                 child: Padding(
-                  padding: EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -115,7 +109,7 @@ class _SettingScreenState extends State<SettingScreen> {
                         ),
                       ),
                       Text(
-                        '$_version ',
+                        _version,
                         style: TextStyle(
                           fontSize: 18,
                           color: colorScheme.primary,
@@ -125,22 +119,39 @@ class _SettingScreenState extends State<SettingScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 10),
+
+              // Banner Ad below version
+              if (_isBannerLoaded && _bannerAd != null)
+                Container(
+                  width: _bannerAd!.size.width.toDouble(),
+                  height: _bannerAd!.size.height.toDouble(),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(10),
+                    color: Colors.transparent,
+                  ),
+                  child: AdWidget(ad: _bannerAd!),
+                ),
             ],
           ),
         ),
       ),
     );
   }
-  void _loadBanner() {
 
+  void _loadBanner() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-7237142331361857/9810896707',
+      adUnitId: 'ca-app-pub-7237142331361857/9810896707', // Replace with your Ad Unit ID
       size: AdSize.banner,
-      request: AdRequest(),
+      request: const AdRequest(),
       listener: BannerAdListener(
-        onAdLoaded: (_) => setState(() => _isBannerLoaded = true),
+        onAdLoaded: (_) {
+          if (mounted) setState(() => _isBannerLoaded = true);
+        },
         onAdFailedToLoad: (ad, error) {
           ad.dispose();
+          debugPrint('BannerAd failed to load: $error');
         },
       ),
     )..load();
@@ -160,5 +171,4 @@ class _SettingScreenState extends State<SettingScreen> {
       });
     }
   }
-
 }

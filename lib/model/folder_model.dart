@@ -10,6 +10,7 @@ class FolderModel extends StatefulWidget {
   final Folders? selectedFolder;
   final bool isNewNote;
   final folderController = TextEditingController();
+
   FolderModel({
     super.key,
     required this.onSelected,
@@ -45,6 +46,7 @@ class _FolderModelState extends State<FolderModel> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
     return SafeArea(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -62,30 +64,45 @@ class _FolderModelState extends State<FolderModel> {
                       border: Border.all(
                         color: colorScheme.outline,
                         width: 1.5,
-                      )
+                      ),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10,vertical: 5),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
                       child: DropdownButtonFormField<int?>(
                         value: folderItems.any((f) => f.id == selectedFolderItem?.id)
                             ? selectedFolderItem?.id
                             : null,
                         decoration: InputDecoration(
                           labelText: 'Select Folder',
-                          labelStyle: TextStyle(fontSize: 10, color: colorScheme.onPrimary),
-                          border: InputBorder.none
+                          labelStyle: TextStyle(
+                            fontSize: 10,
+                            color: colorScheme.onPrimary,
+                          ),
+                          border: InputBorder.none,
                         ),
                         items: [
                           DropdownMenuItem<int?>(
                             value: null,
-                            child: Text('None', style: TextStyle(fontSize: 14,color: colorScheme.onSurface)),
+                            child: Text(
+                              'None',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
                           ),
                           ...folderItems.map(
                                 (folder) => DropdownMenuItem<int?>(
                               value: folder.id,
                               child: Text(
                                 folder.folderName,
-                                style: TextStyle(fontSize: 14, color: colorScheme.primary),
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: colorScheme.primary,
+                                ),
                               ),
                             ),
                           ),
@@ -117,43 +134,19 @@ class _FolderModelState extends State<FolderModel> {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: colorScheme.outline,
-                        width: 1.5
-                      )
+                        width: 1.5,
+                      ),
                     ),
                     child: GestureDetector(
-                      onTap: () async {
-                        final added = await _showNewFolderField(
-                          context,
-                          colorScheme,
-                          widget.folderController,
-                        );
-                        if (!added || widget.folderController.text.isEmpty) {
-                          return;
-                        }
-
-                        final folderName = widget.folderController.text.trim();
-                        final provider = Provider.of<NoteProvider>(
-                          context,
-                          listen: false,
-                        );
-
-                          if (provider.folders.any(
-                                (f) =>
-                            f.folderName.toLowerCase() == folderName.toLowerCase(),
-                          )) {
-                            CustomSnackBar.show(
-                              context,
-                              message: "Folder name already exists!",
-                              backgroundColor: Colors.red,
-                              icon: Icons.warning_amber_rounded,
-                            );
-                            return;
-                          }
-                        final newFolder = await provider.addFolder(folderName);
-                        await _reloadFoldersAfterAdd(newFolder);
-                        widget.folderController.clear();
-                      },
-                      child:  Icon(Icons.add, size: 40,color: colorScheme.onPrimary,),
+                      onTap: _handleAddNewFolder,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Image.asset(
+                          'asset/strokIcons/folder_add.png',
+                          scale: 0.1,
+                          color: colorScheme.onPrimary,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -163,6 +156,75 @@ class _FolderModelState extends State<FolderModel> {
         ],
       ),
     );
+  }
+
+  Future<void> _handleAddNewFolder() async {
+    final added = await _showNewFolderField(
+      context,
+      Theme.of(context).colorScheme,
+      widget.folderController,
+    );
+
+    if (!added || widget.folderController.text.trim().isEmpty) return;
+
+    final folderName = widget.folderController.text.trim();
+    final provider = Provider.of<NoteProvider>(context, listen: false);
+
+    // Check for duplicates
+    if (provider.folders.any((f) => f.folderName.toLowerCase() == folderName.toLowerCase())) {
+      CustomSnackBar.show(
+        context,
+        message: "Folder name already exists!",
+        backgroundColor: Colors.red,
+        icon: Icons.warning_amber_rounded,
+      );
+      return;
+    }
+
+    try {
+      // Add folder via provider
+      final newFolder = await provider.addFolder(folderName);
+
+      if (newFolder.id == null) {
+        throw Exception("Folder creation failed: no ID returned");
+      }
+
+      // Reload folder list
+      await provider.loadFolders();
+
+      final ids = <int>{};
+      folderItems = provider.folders
+          .where((f) => f.id != null)
+          .where((f) => ids.add(f.id!))
+          .toList();
+
+      setState(() {
+        selectedFolderItem =
+            folderItems.firstWhereOrNull((f) => f.id == newFolder.id) ??
+                folderItems.lastOrNull;
+      });
+
+      if (selectedFolderItem != null) {
+        widget.onSelected(selectedFolderItem!);
+      }
+
+      CustomSnackBar.show(
+        context,
+        message: "Folder created successfully!",
+        backgroundColor: Colors.green,
+        icon: Icons.check_circle_outline,
+      );
+
+      widget.folderController.clear();
+    } catch (e) {
+      CustomSnackBar.show(
+        context,
+        message: "Error creating folder. Try again.",
+        backgroundColor: Colors.red,
+        icon: Icons.error_outline,
+      );
+      debugPrint("Folder creation error: $e");
+    }
   }
 
   Future<void> _reloadFoldersAfterAdd(Folders newFolder) async {
@@ -177,11 +239,9 @@ class _FolderModelState extends State<FolderModel> {
         .toList();
 
     setState(() {
-      // pick new folder or fallback to last one
-      selectedFolderItem = folderItems.firstWhereOrNull(
-            (f) => f.id == newFolder.id,
-      ) ??
-          folderItems.lastOrNull;
+      selectedFolderItem =
+          folderItems.firstWhereOrNull((f) => f.id == newFolder.id) ??
+              folderItems.lastOrNull;
     });
 
     if (selectedFolderItem != null) {
@@ -203,9 +263,7 @@ class _FolderModelState extends State<FolderModel> {
     setState(() {
       selectedFolderItem = widget.isNewNote
           ? null
-          : folderItems.firstWhereOrNull(
-            (f) => f.id == widget.selectedFolder?.id,
-      );
+          : folderItems.firstWhereOrNull((f) => f.id == widget.selectedFolder?.id);
     });
 
     if (selectedFolderItem != null) {
@@ -223,23 +281,22 @@ class _FolderModelState extends State<FolderModel> {
       builder: (ctx) => AlertDialog(
         elevation: 0,
         backgroundColor: colorScheme.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16),
-            side: BorderSide(
-                color: colorScheme.outline,
-                width: 1.5
-            )),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: colorScheme.outline, width: 1.5),
+        ),
         title: Center(
-          child: Text("New Folder", style: TextStyle(fontSize: 22, color: colorScheme.primary)),
+          child: Text(
+            "New Folder",
+            style: TextStyle(fontSize: 22, color: colorScheme.primary),
+          ),
         ),
         content: Container(
           height: 50,
           decoration: BoxDecoration(
             color: colorScheme.primaryContainer,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: colorScheme.outline,
-              width: 1.5
-            )
+            border: Border.all(color: colorScheme.outline, width: 1.5),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -270,4 +327,3 @@ class _FolderModelState extends State<FolderModel> {
     return result ?? false;
   }
 }
-

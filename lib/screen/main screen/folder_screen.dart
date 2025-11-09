@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:notes/screen/support%20screen/folder_notes_item_notes.dart';
 import 'package:provider/provider.dart';
+import '../../model/custom_snackbar.dart';
 import '../../model/dialog_helper.dart';
 import '../../service/database/table/folder.dart';
 import '../../service/provider/database_provider.dart';
@@ -253,7 +254,7 @@ class _FolderScreenState extends State<FolderScreen> {
       context: context,
       title: 'Delete Folder',
       message:
-          'Are you sure you want to delete ${selectedFolders.length} folder(s)?',
+          "Are you sure you want to delete ${selectedFolders.length} folder's?",
     );
 
     if (!confirmed) return;
@@ -265,6 +266,13 @@ class _FolderScreenState extends State<FolderScreen> {
 
     exitSelectionMode();
     _loadFolders();
+
+    CustomSnackBar.show(
+      context,
+      message: "Folder's deleted successfully!",
+      backgroundColor: Colors.redAccent,
+      icon: Icons.delete_outline,
+    );
   }
 
   Future<void> _loadFolders() async {
