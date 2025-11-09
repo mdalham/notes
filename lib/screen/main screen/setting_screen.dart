@@ -3,6 +3,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../../service/provider/theme_provider.dart';
+import '../../service/provider/view_type_provider.dart';
 
 class SettingScreen extends StatefulWidget {
   const SettingScreen({super.key});
@@ -59,7 +60,10 @@ class _SettingScreenState extends State<SettingScreen> {
                   border: Border.all(color: colorScheme.outline, width: 1.5),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 1,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -82,6 +86,61 @@ class _SettingScreenState extends State<SettingScreen> {
                             themeProvider.toggleTheme(value);
                           },
                         ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              // Note View Style Row
+              Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: colorScheme.outline, width: 1.5),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Consumer<ViewTypeProvider>(
+                        builder: (context, viewProvider, _) {
+                          // inactive text shows the view that is NOT active
+                          final inactiveText = viewProvider.isGridView
+                              ? 'List'
+                              : 'Grid';
+                          return Text(
+                            'Note View Style: $inactiveText',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: colorScheme.primary,
+                            ),
+                          );
+                        },
+                      ),
+                      Consumer<ViewTypeProvider>(
+                        builder: (context, viewProvider, _) {
+                          return Transform.scale(
+                            scale: 0.8,
+                            child: Switch(
+                              value: viewProvider.isGridView,
+                              activeThumbColor:
+                                  Colors.blue, // active view thumb
+                              inactiveThumbColor:
+                                  Colors.blue, // inactive thumb color
+                              inactiveTrackColor: colorScheme.onPrimary
+                                  .withOpacity(0.3),
+                              onChanged: (value) {
+                                viewProvider.toggleView(value);
+                                setState(() {});
+                              },
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -142,7 +201,8 @@ class _SettingScreenState extends State<SettingScreen> {
 
   void _loadBanner() {
     _bannerAd = BannerAd(
-      adUnitId: 'ca-app-pub-7237142331361857/9810896707', // Replace with your Ad Unit ID
+      adUnitId:
+          'ca-app-pub-7237142331361857/9810896707', // Replace with your Ad Unit ID
       size: AdSize.banner,
       request: const AdRequest(),
       listener: BannerAdListener(

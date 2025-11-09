@@ -4,7 +4,10 @@ import 'package:notes/service/provider/database_provider.dart';
 import 'package:provider/provider.dart';
 import '../../model/notes_layout.dart';
 import '../../model/ads_manager.dart';
+import '../../service/database/table/note.dart';
+import '../../service/provider/view_type_provider.dart';
 import '../support screen/notes_view_screen.dart';
+import '../../model/custom_list_tile.dart';
 
 class FavoriteScreen extends StatefulWidget {
   const FavoriteScreen({super.key});
@@ -22,7 +25,6 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final provider = Provider.of<NoteProvider>(context, listen: false);
       await provider.loadNotes();
@@ -33,7 +35,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
         bannerAdId: 'ca-app-pub-7237142331361857/8306243347',
         interstitialAdId: 'ca-app-pub-7237142331361857/4614023301',
       );
-      _adsManager?.initialize();
+      await _adsManager?.initialize();
       setState(() {});
     });
   }
@@ -46,7 +48,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
 
   @override
   void dispose() {
-    _adsManager!.dispose();
+    _adsManager?.dispose();
     super.dispose();
   }
 
@@ -55,6 +57,9 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final noteProvider = Provider.of<NoteProvider>(context);
     final favoriteNotes = noteProvider.favoriteNotesList;
+    final viewProvider = Provider.of<ViewTypeProvider>(context);
+    final isGridView = viewProvider.isGridView;
+
     return PopScope(
       canPop: !(_adsManager?.isAdShowing ?? false),
       child: Scaffold(
@@ -72,95 +77,144 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
             ),
           ),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(14),
-          child: _adsManager == null || noteProvider.isLoading || _isRefreshing
-              ? const Center(child: CircularProgressIndicator())
-              : favoriteNotes.isEmpty
-              ? Center(
-                  child: Text(
-                    'No favorite notes yet',
-                    style: TextStyle(fontSize: 18, color: colorScheme.onPrimary),
-                  ),
-                )
-              : RefreshIndicator(
-                  displacement: 20,
-                  edgeOffset: 0,
-                  color: Colors.blue,
-                  backgroundColor: Colors.white,
-                  onRefresh: refreshNotes,
-                  child: ValueListenableBuilder(
-                    valueListenable: _adsManager!.loadedAdsCount,
-                    builder: (context, _, __) {
-                      return MasonryGridView.count(
-                        crossAxisCount: 2,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        padding: const EdgeInsets.only(bottom: 70),
-                        physics: const BouncingScrollPhysics(
-                          parent: AlwaysScrollableScrollPhysics(),
-                        ),
-                        itemCount:
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child:
+                _adsManager == null || noteProvider.isLoading || _isRefreshing
+                ? const Center(child: CircularProgressIndicator())
+                : favoriteNotes.isEmpty
+                ? Center(
+                    child: Text(
+                      'No favorite notes yet',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: colorScheme.onPrimary,
+                      ),
+                    ),
+                  )
+                : RefreshIndicator(
+                    displacement: 20,
+                    edgeOffset: 0,
+                    color: Colors.blue,
+                    backgroundColor: Colors.white,
+                    onRefresh: refreshNotes,
+                    child: ValueListenableBuilder(
+                      valueListenable: _adsManager!.loadedAdsCount,
+                      builder: (context, _, __) {
+                        final totalCount =
                             favoriteNotes.length +
-                            _adsManager!.adPositions.length,
-                        itemBuilder: (context, index) {
-                          // Sorted ad indices
-                          final adIndices = _adsManager!.adPositions.keys.toList()
-                            ..sort();
+                            _adsManager!.adPositions.length;
+                        final adIndices = _adsManager!.adPositions.keys.toList()
+                          ..sort();
 
-                          if (_adsManager!.adPositions.containsKey(index)) {
-                            final adWidget = _adsManager?.getAdWidget(index);
-                            if (adWidget != null) return adWidget;
-                          }
-
-                          final noteIndex =
-                              index - adIndices.where((i) => i < index).length;
-                          if (noteIndex < 0 ||
-                              noteIndex >= favoriteNotes.length) {
-                            return const SizedBox.shrink();
-                          }
-
-                          final note = favoriteNotes[noteIndex];
-                          return GestureDetector(
-                            onTap: () {
-                              FocusScope.of(context).unfocus();
-                              _tapCounter++;
-                              if (_tapCounter >= _tapThreshold) {
-                                _tapCounter = 0; // reset counter
-                                if (_adsManager != null) {
-                                  _adsManager!.showInterstitial();
-                                }
+                        if (isGridView) {
+                          // List view
+                          return ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 70),
+                            physics: const BouncingScrollPhysics(
+                              parent: AlwaysScrollableScrollPhysics(),
+                            ),
+                            itemCount: totalCount,
+                            itemBuilder: (context, index) {
+                              if (_adsManager!.adPositions.containsKey(index)) {
+                                final adWidget = _adsManager?.getAdWidget(
+                                  index,
+                                );
+                                if (adWidget != null) return adWidget;
                               }
 
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => NoteViewScreen(
-                                    note: note,
-                                    onReload: () => Provider.of<NoteProvider>(
-                                      context,
-                                      listen: false,
-                                    ).loadNotes(),
+                              final noteIndex =
+                                  index -
+                                  adIndices.where((i) => i < index).length;
+                              if (noteIndex < 0 ||
+                                  noteIndex >= favoriteNotes.length) {
+                                return const SizedBox.shrink();
+                              }
+
+                              final note = favoriteNotes[noteIndex];
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: GestureDetector(
+                                  onTap: () => _openNote(note),
+                                  child: CustomListTile(
+                                    title: note.title,
+                                    subtitle: note.description,
+                                    subMaxLines: 2,
+                                    menuTitles: [
+                                      note.isFavorite
+                                          ? 'Unfavorite'
+                                          : 'Favorite',
+                                      'Edit',
+                                      'Delete',
+                                    ],
+                                    menuCallbacks: [
+                                      () => noteProvider.favoriteNotes(note),
+                                      () => _openNote(note),
+                                      () => noteProvider.deleteNotes(
+                                        note.id ?? 0,
+                                      ),
+                                    ],
                                   ),
                                 ),
                               );
                             },
-                            child: NotesLayout(
-                              note: note,
-                              onUpdated: () {
-                                noteProvider.loadNotes();
-                              },
-                              noteId: note.id ?? 0,
-                              isFavorite: note.isFavorite,
-                              onFavoriteChanged: () =>
-                                  noteProvider.favoriteNotes(note),
-                            ),
                           );
-                        },
-                      );
-                    },
+                        }
+                        return MasonryGridView.count(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 10,
+                          mainAxisSpacing: 10,
+                          padding: const EdgeInsets.only(bottom: 70),
+                          physics: const BouncingScrollPhysics(
+                            parent: AlwaysScrollableScrollPhysics(),
+                          ),
+                          itemCount: totalCount,
+                          itemBuilder: (context, index) {
+                            if (_adsManager!.adPositions.containsKey(index)) {
+                              final adWidget = _adsManager?.getAdWidget(index);
+                              if (adWidget != null) return adWidget;
+                            }
+
+                            final noteIndex =
+                                index -
+                                adIndices.where((i) => i < index).length;
+                            if (noteIndex < 0 ||
+                                noteIndex >= favoriteNotes.length) {
+                              return const SizedBox.shrink();
+                            }
+
+                            final note = favoriteNotes[noteIndex];
+                            return GestureDetector(
+                              onTap: () => _openNote(note),
+                              child: NotesLayout(
+                                note: note,
+                                onUpdated: () => noteProvider.loadNotes(),
+                                noteId: note.id ?? 0,
+                                isFavorite: note.isFavorite,
+                                onFavoriteChanged: () =>
+                                    noteProvider.favoriteNotes(note),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ),
-                ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openNote(Notes note) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NoteViewScreen(
+          note: note,
+          onReload: () =>
+              Provider.of<NoteProvider>(context, listen: false).loadNotes(),
         ),
       ),
     );

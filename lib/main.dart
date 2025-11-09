@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:notes/service/provider/view_type_provider.dart';
 import 'package:provider/provider.dart';
-
 import 'service/provider/database_provider.dart';
 import 'service/provider/theme_provider.dart';
 import 'screen/support screen/splash_screen.dart';
@@ -19,6 +19,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => NoteProvider()..loadNotes()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => ViewTypeProvider()),
       ],
       child: const MyApp(),
     ),

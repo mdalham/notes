@@ -1,21 +1,16 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:geolocator/geolocator.dart';
 
-
-enum ConsentStatus {
-  personalized,
-  nonPersonalized,
-}
+enum ConsentStatus { personalized, nonPersonalized }
 
 class AdsManager {
   final List<int> noteIds;
   final String nativeAdId;
   final String bannerAdId;
   final String interstitialAdId;
+  final ColorScheme? colorScheme;
 
   final ValueNotifier<int> loadedAdsCount = ValueNotifier(0);
   final Map<int, NativeAd> _nativeAds = {};
@@ -25,24 +20,17 @@ class AdsManager {
   final Map<int, String> _loadedAdPositions = {};
   final Map<int, int> _nativeRetry = {};
   final Map<int, int> _bannerRetry = {};
+  final Map<int, Timer> _retryTimers = {};
+
   InterstitialAd? _interstitialAd;
+  bool _isDisposed = false;
+  bool isAdShowing = false;
+
+  ConsentStatus consentStatus = ConsentStatus.personalized;
+  Map<int, String> get adPositions => _loadedAdPositions;
 
   final Random _random = Random();
   final int _maxRetries = 50;
-  final Map<int, Timer> _retryTimers = {};
-  bool _isDisposed = false;
-  Map<int, String> get adPositions => _loadedAdPositions;
-  bool isAdShowing = false;
-  final ColorScheme? colorScheme;
-
-  ConsentStatus consentStatus = ConsentStatus.personalized;
-
-  static const Set<String> _eeaCountryCodes = {
-    'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE',
-    'GR','HU','IS','IE','IT','LV','LI','LT','LU','MT','NL',
-    'NO','PL','PT','RO','SK','SI','ES','SE'
-  };
-
 
   AdsManager({
     required this.noteIds,
@@ -52,78 +40,27 @@ class AdsManager {
     this.colorScheme,
   });
 
-  /// Initialize Mobile Ads SDK & setup consent
+  /// Initialize Mobile Ads SDK and setup ads
   Future<void> initialize() async {
     if (_isDisposed) return;
     await MobileAds.instance.initialize();
-    await _requestUserConsent();
     _loadInterstitial();
     _setupAds();
   }
+
   AdRequest _adRequest() {
     return AdRequest(
       nonPersonalizedAds: consentStatus == ConsentStatus.nonPersonalized,
     );
   }
 
-
-  Future<void> _requestUserConsent() async {
-    try {
-      // Configure Mobile Ads request
-      final requestConfiguration = RequestConfiguration(
-        tagForUnderAgeOfConsent: TagForUnderAgeOfConsent.unspecified,
-        maxAdContentRating: MaxAdContentRating.g,
-      );
-      await MobileAds.instance.updateRequestConfiguration(requestConfiguration);
-
-      // Check if location permission is granted
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-
-      if (permission != LocationPermission.deniedForever) {
-        // Get current position
-        Position position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.low);
-
-        // Determine if user is in EEA
-        bool inEEA = await _isLocationInEEA(position.latitude, position.longitude);
-        consentStatus = inEEA
-            ? ConsentStatus.nonPersonalized
-            : ConsentStatus.personalized;
-      } else {
-        // If permission denied permanently, fallback to non-personalized
-        consentStatus = ConsentStatus.nonPersonalized;
-      }
-    } catch (e) {
-      // On error, fallback to personalized
-      consentStatus = ConsentStatus.personalized;
-    }
-  }
-
-  Future<bool> _isLocationInEEA(double lat, double lon) async {
-    try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(lat, lon);
-      if (placemarks.isEmpty) return false;
-
-      String? countryCode = placemarks.first.isoCountryCode;
-      if (countryCode == null) return false;
-
-      return _eeaCountryCodes.contains(countryCode.toUpperCase());
-    } catch (e) {
-      return false;
-    }
-  }
-
-
+  /// Determine ad positions and load initial ads
   void _setupAds() {
     final totalItems = noteIds.length;
     final nativeCount = AdsCount.nativeAdCount(totalItems);
     final bannerCount = AdsCount.bannerAdCount(totalItems);
     final occupiedPositions = <int>{};
 
-    // Load native ads first
     for (int i = 0; i < nativeCount; i++) {
       int index = _findAvailableIndex(occupiedPositions, totalItems);
       if (index == -1) break;
@@ -131,7 +68,6 @@ class AdsManager {
       loadNativeAd(index);
     }
 
-    // Load banner ads
     for (int i = 0; i < bannerCount; i++) {
       int index = _findAvailableIndex(occupiedPositions, totalItems);
       if (index == -1) break;
@@ -140,6 +76,7 @@ class AdsManager {
     }
   }
 
+  /// Load a Native Ad
   void loadNativeAd(int index) {
     if (_isDisposed ||
         (_nativeAds.containsKey(index) && _nativeReady[index]?.value == true)) {
@@ -162,7 +99,6 @@ class AdsManager {
           _nativeRetry[index] = 0;
           _loadedAdPositions[index] = 'native';
           loadedAdsCount.value++;
-          debugPrint("Native Ad Loaded at index $index");
         },
         onAdFailedToLoad: (ad, error) {
           if (_isDisposed) return;
@@ -170,35 +106,43 @@ class AdsManager {
           _nativeAds.remove(index);
           _nativeReady[index]?.value = false;
           loadedAdsCount.value = max(0, loadedAdsCount.value - 1);
-          debugPrint("Native Ad Failed at index $index: $error");
-
           _scheduleRetry(index, isNative: true);
         },
       ),
+
       nativeTemplateStyle: NativeTemplateStyle(
         templateType: TemplateType.medium,
-        mainBackgroundColor: colorScheme?.surface ?? Colors.white,
-        cornerRadius: 10.0,
+        mainBackgroundColor: Colors.white,
+        cornerRadius: 12.0,
+
+
         callToActionTextStyle: NativeTemplateTextStyle(
-          textColor: colorScheme?.primary ?? Colors.blue,
-          backgroundColor: colorScheme?.secondary ?? Colors.grey,
-          style: NativeTemplateFontStyle.monospace,
-          size: 16.0,
-        ),
-        primaryTextStyle: NativeTemplateTextStyle(
-          textColor: colorScheme?.onSurface ?? Colors.black,
-          style: NativeTemplateFontStyle.italic,
-          size: 16.0,
-        ),
-        secondaryTextStyle: NativeTemplateTextStyle(
-          textColor: colorScheme?.secondary ?? Colors.grey,
+          textColor: Colors.white,
+          backgroundColor: Colors.deepPurple,
           style: NativeTemplateFontStyle.bold,
           size: 16.0,
         ),
-        tertiaryTextStyle: NativeTemplateTextStyle(
-          textColor: colorScheme?.tertiary ?? Colors.green,
+
+
+        primaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.deepPurpleAccent,
+          backgroundColor: Colors.transparent,
+          style: NativeTemplateFontStyle.bold,
+          size: 18.0,
+        ),
+
+        secondaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.grey[800]!,
+          backgroundColor: Colors.transparent,
           style: NativeTemplateFontStyle.normal,
-          size: 16.0,
+          size: 14.0,
+        ),
+
+        tertiaryTextStyle: NativeTemplateTextStyle(
+          textColor: Colors.grey[600]!,
+          backgroundColor: Colors.transparent,
+          style: NativeTemplateFontStyle.italic,
+          size: 13.0,
         ),
       ),
     );
@@ -206,6 +150,7 @@ class AdsManager {
     ad.load();
   }
 
+  /// Load a Banner Ad
   void loadBannerAd(int index) {
     if (_isDisposed ||
         (_bannerAds.containsKey(index) && _bannerReady[index]?.value == true)) {
@@ -228,7 +173,6 @@ class AdsManager {
           _bannerRetry[index] = 0;
           _loadedAdPositions[index] = 'banner';
           loadedAdsCount.value++;
-          debugPrint("Banner Ad Loaded at index $index");
         },
         onAdFailedToLoad: (ad, error) {
           if (_isDisposed) return;
@@ -236,8 +180,6 @@ class AdsManager {
           _bannerAds.remove(index);
           _bannerReady[index]?.value = false;
           loadedAdsCount.value = max(0, loadedAdsCount.value - 1);
-          debugPrint("Banner Ad Failed at index $index: $error");
-
           _scheduleRetry(index, isNative: false);
         },
       ),
@@ -246,7 +188,12 @@ class AdsManager {
     ad.load();
   }
 
-  void _scheduleRetry(int index, {required bool isNative, bool resetRetry = false}) {
+  /// Retry failed ads with exponential backoff
+  void _scheduleRetry(
+    int index, {
+    required bool isNative,
+    bool resetRetry = false,
+  }) {
     if (_isDisposed) return;
 
     if (resetRetry) {
@@ -257,7 +204,9 @@ class AdsManager {
       }
     }
 
-    final attempt = isNative ? (_nativeRetry[index] ?? 1) : (_bannerRetry[index] ?? 1);
+    final attempt = isNative
+        ? (_nativeRetry[index] ?? 1)
+        : (_bannerRetry[index] ?? 1);
     if (attempt >= _maxRetries) return;
 
     final targetCount = isNative
@@ -266,7 +215,7 @@ class AdsManager {
     final currentCount = isNative ? _nativeAds.length : _bannerAds.length;
     if (currentCount >= targetCount) return;
 
-    final delay = _retryDelay(attempt);
+    final delay = Duration(seconds: min(10 * pow(2, attempt - 1).toInt(), 120));
 
     _retryTimers[index]?.cancel();
     _retryTimers[index] = Timer(delay, () {
@@ -280,9 +229,7 @@ class AdsManager {
     });
   }
 
-  Duration _retryDelay(int attempt) =>
-      Duration(seconds: min(10 * pow(2, attempt - 1).toInt(), 120));
-
+  /// Load Interstitial Ad
   void _loadInterstitial() {
     if (_isDisposed) return;
 
@@ -292,28 +239,32 @@ class AdsManager {
       adLoadCallback: InterstitialAdLoadCallback(
         onAdLoaded: (ad) {
           _interstitialAd = ad;
-          _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
-            onAdShowedFullScreenContent: (ad) => isAdShowing = true,
-            onAdDismissedFullScreenContent: (ad) {
-              isAdShowing = false;
-              ad.dispose();
-              _loadInterstitial();
-            },
-            onAdFailedToShowFullScreenContent: (ad, error) {
-              isAdShowing = false;
-              ad.dispose();
-              _loadInterstitial();
-            },
-          );
+          _interstitialAd!.fullScreenContentCallback =
+              FullScreenContentCallback(
+                onAdShowedFullScreenContent: (ad) => isAdShowing = true,
+                onAdDismissedFullScreenContent: (ad) {
+                  isAdShowing = false;
+                  ad.dispose();
+                  _loadInterstitial();
+                },
+                onAdFailedToShowFullScreenContent: (ad, error) {
+                  isAdShowing = false;
+                  ad.dispose();
+                  _loadInterstitial();
+                },
+              );
         },
         onAdFailedToLoad: (_) {
           _interstitialAd = null;
-          if (!_isDisposed) Future.delayed(const Duration(seconds: 5), _loadInterstitial);
+          if (!_isDisposed) {
+            Future.delayed(const Duration(seconds: 5), _loadInterstitial);
+          }
         },
       ),
     );
   }
 
+  /// Show Interstitial Ad
   void showInterstitial() {
     if (_interstitialAd != null && !_isDisposed) {
       _interstitialAd!.show();
@@ -321,15 +272,28 @@ class AdsManager {
     }
   }
 
+  /// Return ad widget for a given index
   Widget getAdWidget(int index) {
     final type = _loadedAdPositions[index];
     if (type == 'native') {
       final ad = _nativeAds[index];
       if (ad != null && _nativeReady[index]?.value == true) {
-        final useSmallTemplate = index % 2 == 0;
+        final bool useSmallTemplate = index % 2 == 0;
         final constraints = useSmallTemplate
-            ? const BoxConstraints(minWidth: 320, minHeight: 90, maxWidth: 400, maxHeight: 200)
-            : const BoxConstraints(minWidth: 320, minHeight: 320, maxWidth: 400, maxHeight: 350);
+            ? const BoxConstraints(
+          minWidth: 320,
+          minHeight: 120,
+          maxWidth: 400,
+          maxHeight: 200,
+        )
+            : const BoxConstraints(
+          minWidth: 320,
+          minHeight: 300,
+          maxWidth: 400,
+          maxHeight: 350,
+        );
+
+
         return ConstrainedBox(
           constraints: constraints,
           child: AdWidget(ad: ad),
@@ -348,50 +312,7 @@ class AdsManager {
     return const SizedBox.shrink();
   }
 
-  int countAdsBefore(int noteIndex) {
-    int count = 0;
-    _loadedAdPositions.keys.forEach((adIndex) {
-      if (adIndex < noteIndex) count++;
-    });
-    return count;
-  }
-
-  void dispose() {
-    if (_isDisposed) return;
-    _isDisposed = true;
-
-    _retryTimers.values.forEach((t) => t.cancel());
-    _retryTimers.clear();
-    _nativeAds.values.forEach((ad) => ad.dispose());
-    _nativeAds.clear();
-    _bannerAds.values.forEach((ad) => ad.dispose());
-    _bannerAds.clear();
-    _interstitialAd?.dispose();
-    _interstitialAd = null;
-
-    _nativeReady.clear();
-    _bannerReady.clear();
-    _loadedAdPositions.clear();
-    _nativeRetry.clear();
-    _bannerRetry.clear();
-  }
-
-  int _findAvailableIndex(Set<int> occupied, int totalItems) {
-    if (occupied.length >= totalItems) return -1;
-
-    int tries = 0;
-    while (tries < 100) {
-      int index = _random.nextInt(totalItems);
-      if (!occupied.contains(index)) return index;
-      tries++;
-    }
-
-    for (int i = 0; i < totalItems; i++) {
-      if (!occupied.contains(i)) return i;
-    }
-    return -1;
-  }
-
+  /// Refresh all ads
   void refreshAds() {
     if (_isDisposed) return;
 
@@ -426,6 +347,52 @@ class AdsManager {
       occupiedPositions.add(index);
       _scheduleRetry(index, isNative: false, resetRetry: true);
     }
+  }
+
+  /// Dispose all ads and timers
+  void dispose() {
+    if (_isDisposed) return;
+    _isDisposed = true;
+
+    for (var t in _retryTimers.values) {
+      t.cancel();
+    }
+    _retryTimers.clear();
+
+    for (var ad in _nativeAds.values) {
+      ad.dispose();
+    }
+    for (var ad in _bannerAds.values) {
+      ad.dispose();
+    }
+    _interstitialAd?.dispose();
+
+    _nativeAds.clear();
+    _bannerAds.clear();
+    _nativeReady.clear();
+    _bannerReady.clear();
+    _loadedAdPositions.clear();
+    _nativeRetry.clear();
+    _bannerRetry.clear();
+  }
+
+  /// Find a random available index for ad placement
+  int _findAvailableIndex(Set<int> occupied, int totalItems) {
+    if (occupied.length >= totalItems) return -1;
+
+    int tries = 0;
+    while (tries < 100) {
+      int index = _random.nextInt(totalItems);
+      if (!occupied.contains(index)) return index;
+      tries++;
+    }
+
+    // fallback linear search
+    for (int i = 0; i < totalItems; i++) {
+      if (!occupied.contains(i)) return i;
+    }
+
+    return -1;
   }
 }
 

@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:notes/model/notes_layout.dart';
 import 'package:notes/model/search_field.dart';
+import 'package:notes/model/custom_list_tile.dart';
 import 'package:notes/screen/support%20screen/notes_view_screen.dart';
 import 'package:notes/service/provider/database_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../model/ads_manager.dart';
+import '../../model/consent_helper.dart';
+import '../../service/database/table/note.dart';
+import '../../service/provider/view_type_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -37,23 +41,23 @@ class _HomeScreenState extends State<HomeScreen> {
       final provider = Provider.of<NoteProvider>(context, listen: false);
       await provider.loadNotes();
 
-      _adsManager = AdsManager(
-        noteIds: provider.notes.map((e) => e.id ?? 0).toList(),
-        nativeAdId: 'ca-app-pub-7237142331361857/7184733369',
-        bannerAdId: 'ca-app-pub-7237142331361857/1081972405',
-        interstitialAdId: 'ca-app-pub-7237142331361857/4917662676',
-      );
-
+      final consentHelper = ConsentHelper();
       try {
+        await consentHelper.initializeConsent();
+
+        _adsManager = AdsManager(
+          noteIds: provider.notes.map((e) => e.id ?? 0).toList(),
+          nativeAdId: 'ca-app-pub-7237142331361857/4071097828',
+          bannerAdId: 'ca-app-pub-7237142331361857/1081972405',
+          interstitialAdId: 'ca-app-pub-7237142331361857/4917662676',
+        );
         await _adsManager?.initialize();
         setState(() {});
       } catch (e) {
-        debugPrint('AdsManager initialization failed: $e');
+        debugPrint('Consent or Ads initialization failed: $e');
       }
     });
   }
-
-
 
   @override
   void didChangeDependencies() {
@@ -72,6 +76,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final notesProvider = Provider.of<NoteProvider>(context);
+    final viewProvider = Provider.of<ViewTypeProvider>(context);
+    final isGridView = viewProvider.isGridView;
 
     return PopScope(
       canPop: !(_adsManager?.isAdShowing ?? false),
@@ -91,24 +97,26 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        body: Padding(
-          padding: EdgeInsets.symmetric(horizontal: 14),
-          child: Column(
-            children: [
-              SearchField(
-                searchNotes: _searchController,
-                onChanged: (s) => setState(() => _query = s),
-              ),
-              SizedBox(height: 10),
-              Expanded(child: bodyContent(notesProvider)),
-            ],
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Column(
+              children: [
+                SearchField(
+                  searchNotes: _searchController,
+                  onChanged: (s) => setState(() => _query = s),
+                ),
+                const SizedBox(height: 10),
+                Expanded(child: bodyContent(notesProvider, isGridView)),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget bodyContent(NoteProvider noteProvider) {
+  Widget bodyContent(NoteProvider noteProvider, bool isGridView) {
     final colorScheme = Theme.of(context).colorScheme;
     final notes = noteProvider.notes;
     final filteredNotes = _query.isEmpty
@@ -118,9 +126,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 (n) => n.title.toLowerCase().contains(_query.toLowerCase()),
               )
               .toList();
+
     if (_adsManager == null || noteProvider.isLoading || _isRefreshing) {
       return const Center(child: CircularProgressIndicator());
     }
+
     if (notes.isEmpty) {
       return Center(
         child: Text(
@@ -129,6 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+
     if (filteredNotes.isEmpty) {
       return Center(
         child: Text(
@@ -137,15 +148,63 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+
     return RefreshIndicator(
       displacement: 20,
-      edgeOffset: 0,
       color: Colors.blue,
       backgroundColor: Colors.white,
       onRefresh: refreshNotes,
       child: ValueListenableBuilder(
         valueListenable: _adsManager!.loadedAdsCount,
         builder: (context, _, __) {
+          final adIndices = _adsManager!.adPositions.keys.toList()..sort();
+          final totalCount =
+              filteredNotes.length + _adsManager!.adPositions.length;
+
+          if (isGridView) {
+            return ListView.builder(
+              padding: const EdgeInsets.only(bottom: 70),
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
+              itemCount: totalCount,
+              itemBuilder: (context, index) {
+                if (_adsManager!.adPositions.containsKey(index)) {
+                  final adWidget = _adsManager?.getAdWidget(index);
+                  if (adWidget != null) return adWidget;
+                }
+
+                final noteIndex =
+                    index - adIndices.where((i) => i < index).length;
+                if (noteIndex < 0 || noteIndex >= filteredNotes.length) {
+                  return const SizedBox.shrink();
+                }
+
+                final note = filteredNotes[noteIndex];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GestureDetector(
+                    onTap: () => _openNote(note),
+                    child: CustomListTile(
+                      title: note.title,
+                      subtitle: note.description,
+                      subMaxLines: 2,
+                      menuTitles: [
+                        note.isFavorite ? 'Unfavorite' : 'Favorite',
+                        'Edit',
+                        'Delete',
+                      ],
+                      menuCallbacks: [
+                        () => noteProvider.favoriteNotes(note),
+                        () => _openNote(note),
+                        () => noteProvider.deleteNotes(note.id ?? 0),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          }
           return MasonryGridView.count(
             crossAxisCount: 2,
             crossAxisSpacing: 10,
@@ -154,11 +213,8 @@ class _HomeScreenState extends State<HomeScreen> {
             physics: const BouncingScrollPhysics(
               parent: AlwaysScrollableScrollPhysics(),
             ),
-            itemCount: filteredNotes.length + _adsManager!.adPositions.length,
+            itemCount: totalCount,
             itemBuilder: (context, index) {
-              // Sorted ad indices
-              final adIndices = _adsManager!.adPositions.keys.toList()..sort();
-
               if (_adsManager!.adPositions.containsKey(index)) {
                 final adWidget = _adsManager?.getAdWidget(index);
                 if (adWidget != null) return adWidget;
@@ -172,45 +228,37 @@ class _HomeScreenState extends State<HomeScreen> {
 
               final note = filteredNotes[noteIndex];
               return GestureDetector(
-                onTap: () {
-                  FocusScope.of(context).unfocus();
-                  _tapCounter++;
-                  if (_tapCounter >= _tapThreshold) {
-                    _tapCounter = 0; // reset counter
-                    if (_adsManager != null) {
-                      _adsManager?.showInterstitial();
-                    }
-                  }
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => NoteViewScreen(
-                        note: note,
-                        onReload: () => Provider.of<NoteProvider>(
-                          context,
-                          listen: false,
-                        ).loadNotes(),
-                      ),
-                    ),
-                  );
-                },
+                onTap: () => _openNote(note),
                 child: NotesLayout(
                   note: note,
-                  onUpdated: () => Provider.of<NoteProvider>(
-                    context,
-                    listen: false,
-                  ).loadNotes(),
+                  onUpdated: () => noteProvider.loadNotes(),
                   noteId: note.id ?? 0,
                   isFavorite: note.isFavorite,
-                  onFavoriteChanged: () => Provider.of<NoteProvider>(
-                    context,
-                    listen: false,
-                  ).favoriteNotes(note),
+                  onFavoriteChanged: () => noteProvider.favoriteNotes(note),
                 ),
               );
             },
           );
         },
+      ),
+    );
+  }
+
+  void _openNote(Notes note) {
+    FocusScope.of(context).unfocus();
+    _tapCounter++;
+    if (_tapCounter >= _tapThreshold) {
+      _tapCounter = 0;
+      _adsManager?.showInterstitial();
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => NoteViewScreen(
+          note: note,
+          onReload: () =>
+              Provider.of<NoteProvider>(context, listen: false).loadNotes(),
+        ),
       ),
     );
   }
@@ -231,7 +279,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showFirstTimeDialog(ColorScheme colorScheme) {
     showDialog(
       context: context,
-      barrierDismissible: false, // must tap button to dismiss
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         backgroundColor: colorScheme.surface,
         shape: RoundedRectangleBorder(
@@ -248,14 +296,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         content: Text(
           "If you uninstall the app, your saved notes will be permanently deleted. "
-          "Make sure to back up anything important before removing the app."
+          "Make sure to back up anything important before removing the app. "
           "Thanks for using Notes!",
           style: TextStyle(color: colorScheme.onPrimary, fontSize: 16),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text("Got it!", style: TextStyle(color: Colors.blue)),
+            child: const Text("Got it!", style: TextStyle(color: Colors.blue)),
           ),
         ],
       ),
@@ -265,6 +313,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> refreshNotes() async {
     setState(() => _isRefreshing = true);
     _adsManager?.refreshAds();
+    await Provider.of<NoteProvider>(context, listen: false).loadNotes();
     setState(() => _isRefreshing = false);
   }
 }
