@@ -9,7 +9,7 @@
         android:label="Notes"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
-        android:theme="@style/LaunchTheme"
+        android:theme="@style/Theme.App.Transparent"
         android:enableOnBackInvokedCallback="true">
 
         <!-- Flutter Impeller (can enable for better performance on newer devices) -->
