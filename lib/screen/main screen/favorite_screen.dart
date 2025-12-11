@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:notes/service/provider/database_provider.dart';
 import 'package:provider/provider.dart';
+import '../../model/custom_snackbar.dart';
+import '../../model/dialog_helper.dart';
 import '../../model/notes_layout.dart';
 import '../../model/ads_manager.dart';
 import '../../service/database/table/note.dart';
@@ -20,7 +22,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
   AdsManager? _adsManager;
   bool _isRefreshing = false;
   int _tapCounter = 0;
-  final int _tapThreshold = 5;
+  final int _tapThreshold = 2;
 
   @override
   void initState() {
@@ -151,9 +153,7 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
                                     menuCallbacks: [
                                       () => noteProvider.favoriteNotes(note),
                                       () => _openNote(note),
-                                      () => noteProvider.deleteNotes(
-                                        note.id ?? 0,
-                                      ),
+                                      () => _deleteNote(context,note),
                                     ],
                                   ),
                                 ),
@@ -206,8 +206,33 @@ class _FavoriteScreenState extends State<FavoriteScreen> {
       ),
     );
   }
+  Future<void> _deleteNote(BuildContext context, Notes note) async {
+    final confirmed = await DialogHelper.showConfirmationDialog(
+      context: context,
+      title: 'Delete Note',
+      message: 'Are you sure you want to delete this note?',
+    );
+    if (!confirmed) return;
+    final provider = Provider.of<NoteProvider>(context, listen: false);
+    await provider.deleteNotes(note.id ?? 0);          // <-- DB + Provider in one call
+    if (!mounted) return;
+    refreshNotes();
+    CustomSnackBar.show(
+      context,
+      message: "Note deleted successfully!",
+      backgroundColor: Colors.redAccent,
+      icon: Icons.delete_outline,
+    );
+  }
+
 
   void _openNote(Notes note) {
+    FocusScope.of(context).unfocus();
+    _tapCounter++;
+    if (_tapCounter >= _tapThreshold) {
+      _tapCounter = 0;
+      _adsManager?.showInterstitial();
+    }
     Navigator.push(
       context,
       MaterialPageRoute(

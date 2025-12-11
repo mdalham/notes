@@ -5,6 +5,8 @@ import 'package:notes/model/custom_list_tile.dart';
 import 'package:notes/screen/support%20screen/notes_view_screen.dart';
 import 'package:notes/service/provider/database_provider.dart';
 import 'package:provider/provider.dart';
+import '../../model/custom_snackbar.dart';
+import '../../model/dialog_helper.dart';
 import '../../service/database/table/folder.dart';
 import '../../service/database/table/note.dart';
 import '../../service/provider/view_type_provider.dart';
@@ -22,7 +24,7 @@ class _FolderNotesItemNotesState extends State<FolderNotesItemNotes> {
   AdsManager? _adsManager;
   bool _isRefreshing = false;
   int _tapCounter = 0;
-  final int _tapThreshold = 5;
+  final int _tapThreshold = 2;
 
   @override
   void initState() {
@@ -170,9 +172,7 @@ class _FolderNotesItemNotesState extends State<FolderNotesItemNotes> {
                                           menuCallbacks: [
                                             () => provider.favoriteNotes(note),
                                             () => _openNote(note),
-                                            () => provider.deleteNotes(
-                                              note.id ?? 0,
-                                            ),
+                                            () => _deleteNote(context,note),
                                           ],
                                         ),
                                       ),
@@ -231,6 +231,25 @@ class _FolderNotesItemNotesState extends State<FolderNotesItemNotes> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _deleteNote(BuildContext context, Notes note) async {
+    final confirmed = await DialogHelper.showConfirmationDialog(
+      context: context,
+      title: 'Delete Note',
+      message: 'Are you sure you want to delete this note?',
+    );
+    if (!confirmed) return;
+    final provider = Provider.of<NoteProvider>(context, listen: false);
+    await provider.deleteNotes(note.id ?? 0);          // <-- DB + Provider in one call
+    if (!mounted) return;
+    refreshNotes();
+    CustomSnackBar.show(
+      context,
+      message: "Note deleted successfully!",
+      backgroundColor: Colors.redAccent,
+      icon: Icons.delete_outline,
     );
   }
 

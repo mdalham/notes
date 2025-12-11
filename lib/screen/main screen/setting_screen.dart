@@ -50,7 +50,6 @@ class _SettingScreenState extends State<SettingScreen> {
         child: Padding(
           padding: const EdgeInsets.all(10),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Theme Mode Row
               Container(
@@ -68,7 +67,7 @@ class _SettingScreenState extends State<SettingScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Theme Mode',
+                        'Dark Mode',
                         style: TextStyle(
                           fontSize: 18,
                           color: colorScheme.primary,
@@ -157,7 +156,7 @@ class _SettingScreenState extends State<SettingScreen> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
-                    vertical: 4,
+                    vertical: 10,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -182,9 +181,9 @@ class _SettingScreenState extends State<SettingScreen> {
               ),
               const SizedBox(height: 10),
 
-              // Banner Ad below version
               if (_isBannerLoaded && _bannerAd != null)
-                Container(
+              Center(
+                child: Container(
                   width: _bannerAd!.size.width.toDouble(),
                   height: _bannerAd!.size.height.toDouble(),
                   alignment: Alignment.center,
@@ -194,13 +193,13 @@ class _SettingScreenState extends State<SettingScreen> {
                   ),
                   child: AdWidget(ad: _bannerAd!),
                 ),
+              )
             ],
           ),
         ),
       ),
     );
   }
-
   void _loadBanner() {
     _bannerAd = BannerAd(
       adUnitId:
@@ -213,7 +212,7 @@ class _SettingScreenState extends State<SettingScreen> {
         },
         onAdFailedToLoad: (ad, error) {
           ad.dispose();
-          debugPrint('BannerAd failed to load: $error');
+          debugPrint('Setting BannerAd failed to load: $error');
         },
       ),
     )..load();

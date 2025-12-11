@@ -9,8 +9,12 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../model/ads_manager.dart';
 import '../../model/consent_helper.dart';
+import '../../model/custom_snackbar.dart';
+import '../../model/dialog_helper.dart';
+import '../../service/database/database_helper.dart';
 import '../../service/database/table/note.dart';
 import '../../service/provider/view_type_provider.dart';
+import '../support screen/add_or_edit_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -20,11 +24,12 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+
   final TextEditingController _searchController = TextEditingController();
   String _query = "";
   bool _isRefreshing = false;
   int _tapCounter = 0;
-  final int _tapThreshold = 5;
+  final int _tapThreshold = 2;
   AdsManager? _adsManager;
 
   @override
@@ -197,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       menuCallbacks: [
                         () => noteProvider.favoriteNotes(note),
                         () => _openNote(note),
-                        () => noteProvider.deleteNotes(note.id ?? 0),
+                        () => _deleteNote(context,note),
                       ],
                     ),
                   ),
@@ -241,6 +246,25 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         },
       ),
+    );
+  }
+
+  Future<void> _deleteNote(BuildContext context, Notes note) async {
+    final confirmed = await DialogHelper.showConfirmationDialog(
+      context: context,
+      title: 'Delete Note',
+      message: 'Are you sure you want to delete this note?',
+    );
+    if (!confirmed) return;
+    final provider = Provider.of<NoteProvider>(context, listen: false);
+    await provider.deleteNotes(note.id ?? 0);          // <-- DB + Provider in one call
+    if (!mounted) return;
+    refreshNotes();
+    CustomSnackBar.show(
+      context,
+      message: "Note deleted successfully!",
+      backgroundColor: Colors.redAccent,
+      icon: Icons.delete_outline,
     );
   }
 

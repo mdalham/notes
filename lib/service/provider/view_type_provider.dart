@@ -20,7 +20,7 @@ class ViewTypeProvider with ChangeNotifier {
   // Load the value from SharedPreferences
   Future<void> _loadFromPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    _isGridView = prefs.getBool(_prefKey) ?? false; // default to false (list view)
+    _isGridView = prefs.getBool(_prefKey) ?? false;
     notifyListeners();
   }
 

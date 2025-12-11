@@ -20,7 +20,7 @@ class _FolderScreenState extends State<FolderScreen> {
   bool isLoading = false;
   bool _isRefreshing = false;
   int _tapCounter = 0;
-  final int _tapThreshold = 5;
+  final int _tapThreshold = 2;
   AdsManager? _adsManager;
 
   @override
